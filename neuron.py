@@ -176,7 +176,7 @@ class Variable:
 class Variables:
     def __init__(self, N, track_variables=None, init=True, u=0, spike_rate=0, spike_probability=0, open_prob=0, S=0, release_rate=0,
     release_vector=0, N_v=0, ap_duration_count=0, Ca_pre=0, Ca_Astro=0, Ca_stored=0, site_probabilities=np.zeros(4),
-    release_prob=0, glu=0, IP3=0, h=0, mutual_information=0) -> None:
+    release_prob=0, release_prob_a_posteriori=0, glu=0, IP3=0, h=0, mutual_information=0) -> None:
         self.track_variables = track_variables
         self.N = N
         self.u = Variable("Membrane voltage", "V", u, init, "u" in track_variables, N)
@@ -195,6 +195,7 @@ class Variables:
         for i in range(4):
            self.site_probabilities.append(Variable("Active site channel " + str(i) + " opening probability", "", site_probabilities[i], init, "site_probabilities" in track_variables, N))
         self.release_prob = Variable("Vesicle release probability", "", release_prob, init, "release_prob" in track_variables, N)
+        self.release_prob_a_posteriori = Variable("Vesicle release probability a posteriori w.r.t. AP", "", release_prob_a_posteriori, init, "release_prob_a_posteriori" in track_variables, N)
         self.glu = Variable("Glutamate available for Astrocytic mGlur binding", "uM", glu, init, "glu" in track_variables, N)
         self.IP3 = Variable("IP3 concentration (Astrocyte)", "uM", IP3, init, "IP3" in track_variables, N)
         self.h = Variable("Inhibition parameter (IP3 production)", "uM", h, init, "h" in track_variables, N)
@@ -351,18 +352,20 @@ class Simulator:
                 # probability of having one release without an AP
                 spontaneous_rate = lib.spontaneousRate(var.Ca_pre.get(i))
                 release_prob_no_AP = lib.poisson(var.N_v.get(i)*spontaneous_rate, time_step) if var.N_v.get(i) > 0 else 0   # P(V[n]=1 | S[n]=0)
+                var.release_prob.set(var.spike_probability.get(i)*release_prob_during_AP + (1 - var.spike_probability.get(i))*release_prob_no_AP, i)  # P(V[n]=1)  Total probability theorem)
                 if (spike_active == True):
-                    var.release_prob.set(release_prob_during_AP, i)
+                    var.release_prob_a_posteriori.set(release_prob_during_AP, i)
                 else:
-                    var.release_prob.set(release_prob_no_AP, i)
+                    var.release_prob_a_posteriori.set(release_prob_no_AP, i)
                 rand = np.random.random()
-                if (var.release_prob.get(i) > rand):
+                if (var.release_prob_a_posteriori.get(i) > rand):
                     var.N_v.set(var.N_v.get(i) - 1, i)
                     var.release_vector.set(1, i)
                     last_release = i
             else:
                 var.release_rate.set(0, i)
                 var.release_prob.set(0, i)
+                var.release_prob_a_posteriori.set(0, i)
                 release_prob_during_AP = 0
                 release_prob_no_AP = 0
 
