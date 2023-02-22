@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import lib
 import pickle
 import copy
-
+#prova
 units = {
         "membrane_tau": "s",
         "spike_duration": "s",
