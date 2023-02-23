@@ -12,24 +12,19 @@ units = {
         "C": "uF",
         "R": "ohm",
         "threshold": "V",
-        "LTP_active": "",
-        "STD_active": "",
         "Urest": "V",
         "Threshold_rest": "V",
         "hyperp_v": "V",
         "hyperp_tau": "s",
-        "N_v_max": "",
         "vesicles_replenishment_time": "s",
         "glutamate_clearance_time": "s",
         "time_step": "s",
         "simulation_time": "s",
         "temperature": "K",
-        "N": "",
         "lambda_fixed": "",
         "current": "A",
         "f_current": "Hz",
-        "lambda_": "Hz",
-        "N_iterations": ""
+        "lambda_": "Hz"
     }
 
 class Properties:
@@ -57,7 +52,7 @@ class Properties:
     def __str__(self) -> str:
         string = ""
         for k, v in self.__dict__.items():
-            string += k + " = " + str(v) + " " + units[k] + "\n"
+            string += k + " = " + str(v) + " " + (units[k] if k in units.keys() else "") + "\n"
         return string
 
 class SimulationParameters:
@@ -102,7 +97,7 @@ class SimulationParameters:
     def __str__(self) -> str:
         string = ""
         for k, v in self.__dict__.items():
-            string += k + " = " + str(v) + " " + units[k] + "\n"
+            string += k + " = " + str(v) + " " + (units[k] if k in units.keys() else "") + "\n"
         return string
 
 class Noise:
@@ -160,6 +155,13 @@ class Variable:
             self.value.append(other.value)
         self.n_plots += 1
 
+    def restrict(self, start, end):
+        if (self.n_plots == 1):
+            self.value = self.value[start:end]
+        else:
+            for i in range(self.n_plots):
+                self.value[i] = self.value[i][start:end]
+
     def __add__(self, other):
         sum = copy.copy(self)
         sum.value = self.value + other.value
@@ -216,6 +218,12 @@ class Variables:
         for k, v in group:
             group.__dict__[k].group(other.__dict__[k])
         return group
+    
+    def restrict(self, start, end):
+        restriction = copy.copy(self)
+        for k, v in restriction:
+            restriction.__dict__[k].restrict(start, end)
+        return restriction
  
 
     def __add__(self, other):

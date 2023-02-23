@@ -23,11 +23,15 @@ def myPlotFigure (common_axis:plt.Axes, xaxis, yaxis, title, unitLabel="", label
 
 def drawFigure(simulation_time, time_step, variables: neuron.Variables, time_window=None, n_drawings=1, n_plots=1, axes=None, labels=None, dpixel=400):
 
+    plt.rcParams["legend.loc"] = "upper right"
+
     rows = int(np.ceil(n_drawings/2))
     columns = 1 if n_drawings == 1 else 2
     figsize = (3, 2) if n_drawings == 1 else (10, 3*rows)
-    start, end = time_window if time_window != None else 0, simulation_time
+    start, end = time_window if time_window != None else (0, simulation_time)
     t_axis = np.arange(start, end, time_step)
+    if (time_window != None):
+        variables = variables.restrict(int(start/time_step), int(end/time_step)+1)
     fig, axes = plt.subplots(rows, columns, sharex=True, layout="constrained", figsize=figsize, dpi=dpixel)
 
     if (n_plots == 1):
