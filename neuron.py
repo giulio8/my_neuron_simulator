@@ -220,7 +220,7 @@ class Variables:
         return group
     
     def restrict(self, start, end):
-        restriction = copy.copy(self)
+        restriction = copy.deepcopy(self)
         for k, v in restriction:
             restriction.__dict__[k].restrict(start, end)
         return restriction
