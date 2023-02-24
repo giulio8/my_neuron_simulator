@@ -12,7 +12,7 @@ def poisson(rate, time_step):
 
 def entropy(probability):
     probability = np.array(probability)
-    return -np.sum(probability*np.log2(probability))#, out=np.zeros_like(probability), where=(probability!=0))
+    return -np.sum(probability*np.log2(probability, out=np.zeros_like(probability), where=(probability!=0)))
 
 def mutualInformation2(spike_probability, release_prob_during_AP, release_prob_no_AP):
     v_prob = spike_probability*release_prob_during_AP + (1 - spike_probability)*release_prob_no_AP  # P(V[n]=1)  Total probability theorem
@@ -38,11 +38,11 @@ def mutualInformation(spike_probability, release_prob_during_AP, release_prob_no
                     release_prob_no_AP, # P(V[n]=1 | S[n]=0)
                     1 - release_prob_no_AP # P(V[n]=0 | S[n]=0)
                     ])
-    if (np.all(conditional_prob_S0<1e-7)==False):
+    if (np.any(conditional_prob_S0<1e-7)==False):
         conditional_entropy = entropy(conditional_prob_S0)*(1-spike_probability)   #  H(V[n] | S[n])
     else:
         conditional_entropy = 0
-    if (np.all(conditional_prob_S1<1e-7)==False):
+    if (np.any(conditional_prob_S1<1e-7)==False):
         conditional_entropy += entropy(conditional_prob_S1)*spike_probability
 
     return entropy_v - conditional_entropy    #  I(S[n] ; V[n]) = H(V[n]) - H(V[n] | S[n])
