@@ -31,7 +31,9 @@ def drawFigure(simulation_time, time_step, variables: neuron.Variables, time_win
     start, end = time_window if time_window != None else (0, simulation_time)
     t_axis = np.arange(start, end, time_step)
     if (time_window != None):
-        variables_to_plot = variables.restrict(int(start/time_step), int(end/time_step)+1)
+        idx_start = int(np.ceil(start/time_step))
+        idx_end = int(np.floor(end/time_step))+1
+        variables_to_plot = variables.restrict(idx_start, idx_end)
     else:
         variables_to_plot = variables
     fig, axes = plt.subplots(rows, columns, sharex=True, layout="constrained", figsize=figsize, dpi=dpixel)
