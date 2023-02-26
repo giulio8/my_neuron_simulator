@@ -101,11 +101,12 @@ class SimulationParameters:
         return string
 
 class Noise:
-    def __init__(self, thermal=False, axonal=False, AP_width_CV=0, escape=True) -> None:
+    def __init__(self, thermal=False, axonal=False, AP_width_CV=0, escape=True, spontaneous_release=True) -> None:
         self.thermal = thermal
         self.AP_width_CV = AP_width_CV
         self.axonal = axonal
         self.escape = escape
+        self.spontaneous_release = spontaneous_release
 
     def __str__(self) -> str:
         string = ""
@@ -176,6 +177,8 @@ class Variable:
 
 
 class Variables:
+
+    
     def __init__(self, N, track_variables=None, init=True, u=0, spike_rate=0, spike_probability=0, open_prob=0, S=0, release_rate=0,
     release_vector=0, N_v=0, ap_duration_count=0, Ca_pre=0, Ca_Astro=0, Ca_stored=0, site_probabilities=np.zeros(4),
     release_prob=0, release_prob_a_posteriori=0, glu=0, IP3=0, h=0, mutual_information=0) -> None:
@@ -338,7 +341,7 @@ class Simulator:
                 var.IP3.update(i, funcIP3)
                 funch = lambda h: lib.updateInhibitionParameter(h, var.IP3.get(i-1), var.Ca_Astro.get(i-1), time_step)
                 var.h.update(i, funch)
-                var.Ca_pre.set(Ca_AP+var.Ca_stored.get(i), i)
+            var.Ca_pre.set(Ca_AP+var.Ca_stored.get(i), i)
 
             #Vesicle release dynamics
             open_prob_temp = 1
@@ -359,14 +362,14 @@ class Simulator:
                 release_prob_during_AP = lib.poisson(var.N_v.get(i)*var.release_rate.get(i), time_step)  # P(V[n]=1 | S[n]=1)
                 # probability of having one release without an AP
                 spontaneous_rate = lib.spontaneousRate(var.Ca_pre.get(i))
-                release_prob_no_AP = lib.poisson(var.N_v.get(i)*spontaneous_rate, time_step) if var.N_v.get(i) > 0 else 0   # P(V[n]=1 | S[n]=0)
+                release_prob_no_AP = lib.poisson(var.N_v.get(i)*spontaneous_rate, time_step) if self.noise.spontaneous_release and var.N_v.get(i) > 0 else 0   # P(V[n]=1 | S[n]=0)
                 var.release_prob.set(var.spike_probability.get(i)*release_prob_during_AP + (1 - var.spike_probability.get(i))*release_prob_no_AP, i)  # P(V[n]=1)  Total probability theorem)
                 if (spike_active == True):
                     var.release_prob_a_posteriori.set(release_prob_during_AP, i)
                 else:
                     var.release_prob_a_posteriori.set(release_prob_no_AP, i)
                 rand = np.random.random()
-                if (var.release_prob_a_posteriori.get(i) > rand):
+                if (var.release_prob_a_posteriori.get(i) > rand): #1 vesicle is released
                     var.N_v.set(var.N_v.get(i) - 1, i)
                     var.release_vector.set(1, i)
                     last_release = i

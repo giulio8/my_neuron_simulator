@@ -32,7 +32,7 @@ def drawFigure(simulation_time, time_step, variables: neuron.Variables, time_win
     t_axis = np.arange(start, end, time_step)
     if (time_window != None):
         idx_start = int(np.ceil(start/time_step))
-        idx_end = int(np.floor(end/time_step))+1
+        idx_end = idx_start + len(t_axis)
         variables_to_plot = variables.restrict(idx_start, idx_end)
     else:
         variables_to_plot = variables
