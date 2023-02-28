@@ -129,6 +129,7 @@ dmypy.json
 .pyre/
 risultati/
 img/
+img28_02/
 contenitore/
 values
 parameters

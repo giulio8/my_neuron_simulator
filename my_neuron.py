@@ -163,6 +163,13 @@ class Variable:
             for i in range(self.n_plots):
                 self.value[i] = self.value[i][start:end]
 
+    def averageEach(self, n):
+        if (self.n_plots == 1):
+            self.value = averageEach(self.value, n)
+        else:
+            for i in range(self.n_plots):
+                self.value[i] = averageEach(self.value[i], n)
+
     def __add__(self, other):
         sum = copy.copy(self)
         sum.value = self.value + other.value
@@ -177,6 +184,8 @@ class Variable:
 
 
 class Variables:
+
+    
     def __init__(self, N, track_variables=None, init=True, u=0, spike_rate=0, spike_probability=0, open_prob=0, S=0, release_rate=0,
     release_vector=0, N_v=0, ap_duration_count=0, Ca_pre=0, Ca_Astro=0, Ca_stored=0, site_probabilities=np.zeros(4),
     release_prob=0, release_prob_a_posteriori=0, glu=0, IP3=0, h=0, mutual_information=0) -> None:
@@ -265,8 +274,8 @@ class Simulator:
         s_ref_count = int(self.p.t_ref_s/time_step)
         v_ref_count = int(self.p.t_ref_v/time_step)
         var.N_v.initialize(self.p.N_v_max)
-        var.IP3.initialize(0.421021)#160e-3 #uM (equilibrium concentration)
-        var.h.initialize(0.705339)
+        var.IP3.initialize(160e-3) #uM (equilibrium concentration) #(0.421021) 
+        var.h.initialize(np.random.random()) #0.705339 valore di salto
 
         T_info = int(1/time_step)
 
@@ -435,3 +444,15 @@ def saveResults(parameters: SimulationParameters, properties: Properties, result
     f3 = open("values", "wb")
     pickle.dump(results, f3)
     f3.close()
+
+def averageEach(array, n):
+    sum = 0
+    for i, val in enumerate(array, 1):
+        if (i % n == 0):
+            for j in range(n):
+                prev = array[i-n]
+                succ = sum/n
+                array[i-j] = prev + (succ - prev)*(n-j)/n
+            sum = 0
+        sum += val
+    return array
