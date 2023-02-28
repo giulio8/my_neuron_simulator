@@ -86,7 +86,7 @@ def vesicleReplenishment(previous, replenishment_time=0, time_step=0.02e-3):
         return previous
 
 def spontaneousRate(Ca_pre):
-    a = np.array([7181, 606, 100]) # uM, uM, ms^(-1)
+    a = np.array([7181, 606, 100e3]) # uM, uM, s^(-1)
 
     return a[2]/(1 + np.exp((a[0] - Ca_pre)/a[1]))
 
