@@ -167,3 +167,10 @@ def updateIP3 (previous, Ca_Astro, glu, time_step, glu_active=False):
         delta_IP3 += v_glu*(glu**n_glu)/(k_glu**n_glu + glu**n_glu)
 
     return delta_IP3*time_step + previous
+
+
+def updateProbSpikeActive(previous, p_init, p_init_prev):
+    return 1 - ((1 - previous)*(1 - p_init)/(1 - p_init_prev))
+
+def updateProbSpikeReady(previous, p_init, p_init_prev):
+    return previous*(1 - p_init)/(1 - p_init_prev)

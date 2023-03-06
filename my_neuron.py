@@ -101,12 +101,14 @@ class SimulationParameters:
         return string
 
 class Noise:
-    def __init__(self, thermal=False, axonal=False, AP_width_CV=0, escape=True, spontaneous_release=True) -> None:
+    def __init__(self, thermal=False, axonal=False, AP_width_CV=0, escape=True, spontaneous_release=True,
+                 h_init_random=True) -> None:
         self.thermal = thermal
         self.AP_width_CV = AP_width_CV
         self.axonal = axonal
         self.escape = escape
         self.spontaneous_release = spontaneous_release
+        self.h_init_random = h_init_random
 
     def __str__(self) -> str:
         string = ""
@@ -134,6 +136,12 @@ class Variable:
     def set(self, value, index=None):
         if (self.array == True):
             self.value[index] = value
+        else:
+            self.value = value
+
+    def setAllTo(self, shape, value):
+        if(self.array):
+            self.value = np.full(shape, fill_value=value)
         else:
             self.value = value
 
@@ -186,14 +194,18 @@ class Variable:
 class Variables:
 
     
-    def __init__(self, N, track_variables=None, init=True, u=0, spike_rate=0, spike_probability=0, open_prob=0, S=0, release_rate=0,
+    def __init__(self, N, track_variables=None, init=True, u=0, spike_rate=0, spike_probability=0, spike_probability_a_priori=0,
+    ap_active_prob=0, ap_ready_prob=0, open_prob=0, S=0, release_rate=0,
     release_vector=0, N_v=0, ap_duration_count=0, Ca_pre=0, Ca_Astro=0, Ca_stored=0, site_probabilities=np.zeros(4),
-    release_prob=0, release_prob_a_posteriori=0, glu=0, IP3=0, h=0, mutual_information=0) -> None:
+    release_prob=0, release_prob_a_posteriori=0, glu=0, IP3=0, h=0, mutual_information=0, entropy_v=0, cond_entropy=0) -> None:
         self.track_variables = track_variables
         self.N = N
         self.u = Variable("Membrane voltage", "V", u, init, "u" in track_variables, N)
         self.spike_rate = Variable("Spike rate", "Hz", spike_rate, init, "spike_rate" in track_variables, N)
-        self.spike_probability = Variable("Spike probability", "", spike_probability, init, "spike_probability" in track_variables, N)
+        self.spike_probability = Variable("Probability directly derived from spike rate", "", spike_probability, init, "spike_probability" in track_variables, N)
+        self.spike_probability_a_priori = Variable("Probability of AP emission", "", spike_probability_a_priori, init, True, N)
+        self.ap_active_prob = Variable("Probability of AP currently active", "", ap_active_prob, init, "ap_active_prob" in track_variables, N)
+        self.ap_ready_prob = Variable("Probability of neuron currently ready to emit an AP", "", ap_ready_prob, init, "ap_ready_prob" in track_variables, N)
         self.open_prob = Variable("Open probability", "", open_prob, init, "open_prob" in track_variables, N)
         self.S = Variable("Action potentials", "", S, init, "S" in track_variables, N)
         self.release_rate = Variable("Release rate", "Hz", release_rate, init, "release_rate" in track_variables, N)
@@ -212,7 +224,8 @@ class Variables:
         self.IP3 = Variable("IP3 concentration (Astrocyte)", "uM", IP3, init, "IP3" in track_variables, N)
         self.h = Variable("Inhibition parameter (IP3 production)", "uM", h, init, "h" in track_variables, N)
         self.mutual_information = Variable("Mutual information", "bits/sec", mutual_information, init, "mutual_information" in track_variables, N)
-        
+        self.entropy_v = Variable("Entropy of vesicle release", "bits/sec", entropy_v, init, "entropy_v" in track_variables, N)
+        self.conditional_entropy = Variable("Conditional Entropy of vesicle release given AP", "bits/sec", cond_entropy, init, "conditional_entropy" in track_variables, N)
 
     def initializeArrays(self, N):
         for k, v in self:
@@ -275,9 +288,10 @@ class Simulator:
         v_ref_count = int(self.p.t_ref_v/time_step)
         var.N_v.initialize(self.p.N_v_max)
         var.IP3.initialize(160e-3) #uM (equilibrium concentration) #(0.421021) 
-        var.h.initialize(np.random.random()) #0.705339 valore di salto
+        var.h.initialize(np.random.random() if self.noise.h_init_random else 0.705339) #0.705339 valore di salto
+        var.ap_ready_prob.initialize(1)
 
-        T_info = int(1/time_step)
+        T_info = int(0.2/time_step)
 
 
         glutamate_clearance_time = 2e-3 #s
@@ -285,34 +299,44 @@ class Simulator:
         glu_active = False
         m_info_delta_T_sum = 0
 
+        if (self.s.lambda_fixed):
+            var.spike_rate.setAllTo(N, self.s.lambda_)
+            var.spike_probability.setAllTo(N, lib.poisson(var.spike_rate.get(0), time_step))
+
         for i in range(1, N):
             
             # Voltage
-            if ((state == "init" or state == "Spike-AfterPotential") and self.s.lambda_fixed == False):
+            #if ((state == "init" or state == "Spike-AfterPotential") and self.s.lambda_fixed == False):
+            if (self.s.lambda_fixed == False):
                 func = lambda u: lib.updateVoltage(u, self.s.current[i], self.p.C, self.p.Urest, self.p.membrane_tau, time_step, self.noise.thermal, self.s.temperature, self.p.R)
                 var.u.update(i, func)
-            elif (state == "AP"):
-                var.S.set(1, i)
-                last_spike = i
-                if (self.noise.axonal == True):
-                    ap_duration_count = int((self.p.spike_duration/time_step)*(1 + np.random.normal(0, self.noise.AP_width_CV)))
-                    #print(str(ap_duration_count) + " ")
-                var.u.set(self.p.hyperp_v, i)
-                state = "Spike-AfterPotential"
+            #elif (state == "AP"):
+                #state = "Spike-AfterPotential"
             """elif (state == "Spike-AfterPotential"):
                 u[i] = time_step*(current[i]/C - (u[i-1] - Urest)/membrane_tau) + u[i-1]
                 #u[i] -= time_step*(u[i-1] - Urest)/hyperp_tau"""
 
-            if (self.s.lambda_fixed == True):
-                var.spike_rate.set(self.s.lambda_, i)
-                var.spike_probability.set(lib.poisson(var.spike_rate.get(i), time_step), i)
-            else:
-                if (self.noise.escape == True):
+            if (self.s.lambda_fixed == False):
+                if (self.noise.escape):
                     var.spike_rate.set(lib.sigmoidalNonLinearity(var.u.get(i) - self.p.Urest), i)
                     var.spike_probability.set(lib.poisson(var.spike_rate.get(i), time_step), i)
                 else:
                     var.spike_probability.set(int(var.u.get(i) >= self.p.threshold), i)
+
+            rand = np.random.random()
+            if (i - last_spike >= s_ref_count and var.spike_probability.get(i) > rand):
+                var.S.set(1, i)
+                last_spike = i
+                if (self.noise.axonal):
+                    ap_duration_count = int((self.p.spike_duration/time_step)*(1 + np.random.normal(0, self.noise.AP_width_CV)))
+                var.u.set(self.p.hyperp_v, i)
             
+            func = lambda p: lib.updateProbSpikeReady(p, (var.spike_probability_a_priori.get(i-1) if i>=1 else 0), (var.spike_probability_a_priori.get(i-s_ref_count) if i >= s_ref_count else 0))
+            var.ap_ready_prob.update(i, func)
+            func = lambda p: lib.updateProbSpikeActive(p, (var.spike_probability_a_priori.get(i-1) if i>=1 else 0), (var.spike_probability_a_priori.get(i-ap_duration_count) if i >= ap_duration_count else 0))
+            var.ap_active_prob.update(i, func)
+            ## with absolute refractary time = spike duration, P(spike ready) = 1-P(spike active)
+            var.spike_probability_a_priori.set(var.spike_probability.get(i)*var.ap_ready_prob.get(i), i)
 
             # Presynaptic Calcium stays fixed to 300uM during an AP
             if (i - last_spike < ap_duration_count):
@@ -389,19 +413,16 @@ class Simulator:
                 release_prob_no_AP = 0
 
             # Mutual information
-            mutual_information = lib.mutualInformation(var.spike_probability.get(i), release_prob_during_AP, release_prob_no_AP) #bits in one single time step
+            mutual_information = lib.mutualInformation(var.ap_active_prob.get(i), release_prob_during_AP, release_prob_no_AP) #bits in one single time step
+
+            #var.mutual_information.set(mutual_information/time_step, i) #bits/sec
             if (i % T_info == 0):
-                for j in range(T_info):
-                    prev = var.mutual_information.get(i-T_info)
-                    succ = m_info_delta_T_sum/T_info/time_step
-                    var.mutual_information.set(prev + (succ - prev)*(T_info-j)/T_info, i-j) # bits/sec
+                prev = var.mutual_information.get(i-T_info)
+                succ = m_info_delta_T_sum/T_info/time_step
+                for j, value in enumerate(np.linspace(prev, succ, T_info)):
+                    var.mutual_information.set(value, i-T_info+j+1) # bits/sec
                 m_info_delta_T_sum = 0
             m_info_delta_T_sum += mutual_information
-
-
-            rand = np.random.random()
-            if (i - last_spike > s_ref_count and var.spike_probability.get(i) > rand):
-                state = "AP"
 
             # Variable set to state variables
             var.ap_duration_count.set(ap_duration_count, i)
