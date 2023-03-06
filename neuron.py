@@ -229,6 +229,7 @@ class Variables:
             group.__dict__[k].group(other.__dict__[k])
         return group
     
+    
     def restrict(self, start, end):
         restriction = copy.deepcopy(self)
         for k, v in restriction:
