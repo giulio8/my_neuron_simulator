@@ -116,10 +116,10 @@ class Noise:
         return string
 
 class Variable:
-    def __init__(self, title, unit="", value=0, init=True, array=False, N=0):
+    def __init__(self, title, unit="", value=0, init=True, array=False, N=0, dtype=np.float64):
         self.title = title
         if (init == True and array == True):
-            self.value = np.zeros(N)
+            self.value = np.zeros(N, dtype=dtype)
         else:
             self.value = value
         self.unit = unit
@@ -196,7 +196,7 @@ class Variables:
     def __init__(self, N, track_variables=None, init=True, u=0, spike_rate=0, spike_probability=0, spike_probability_a_priori=0,
     ap_active_prob=0, ap_ready_prob=0, open_prob=0, S=0, release_rate=0,
     release_vector=0, N_v=0, ap_duration_count=0, Ca_pre=0, Ca_Astro=0, Ca_stored=0, site_probabilities=np.zeros(4),
-    release_prob=0, release_prob_a_posteriori=0, glu=0, IP3=0, h=0, mutual_information=0, entropy_v=0, cond_entropy=0) -> None:
+    release_prob=0, release_prob_a_posteriori=0, glu=0, IP3=0, h=0, mutual_information=0) -> None:
         self.track_variables = track_variables
         self.N = N
         self.u = Variable("Membrane voltage", "V", u, init, "u" in track_variables, N)
@@ -206,11 +206,11 @@ class Variables:
         self.ap_active_prob = Variable("Probability of AP currently active", "", ap_active_prob, init, "ap_active_prob" in track_variables, N)
         self.ap_ready_prob = Variable("Probability of neuron currently ready to emit an AP", "", ap_ready_prob, init, "ap_ready_prob" in track_variables, N)
         self.open_prob = Variable("Open probability", "", open_prob, init, "open_prob" in track_variables, N)
-        self.S = Variable("Action potentials", "", S, init, "S" in track_variables, N)
+        self.S = Variable("Action potentials", "", S, init, "S" in track_variables, N, dtype=np.int16)
         self.release_rate = Variable("Release rate", "Hz", release_rate, init, "release_rate" in track_variables, N)
-        self.release_vector = Variable("Vesicles released", "", release_vector, init, "release_vector" in track_variables, N)
-        self.N_v = Variable("Vesicle in Ready pool", "", N_v, init, "N_v" in track_variables, N)
-        self.ap_duration_count = Variable("AP width, normalized w.r.t. deltaT", "", ap_duration_count, init, "ap_duration_count" in track_variables, N)
+        self.release_vector = Variable("Vesicles released", "", release_vector, init, "release_vector" in track_variables, N, dtype=np.int16)
+        self.N_v = Variable("Vesicle in Ready pool", "", N_v, init, "N_v" in track_variables, N, dtype=np.int16)
+        self.ap_duration_count = Variable("AP width, normalized w.r.t. deltaT", "", ap_duration_count, init, "ap_duration_count" in track_variables, N, dtype=np.int16)
         self.Ca_pre = Variable("Presynaptic calcium", "uM", Ca_pre, init, "Ca_pre" in track_variables, N)
         self.Ca_Astro = Variable("Astrocytic calcium", "uM", Ca_Astro, init, "Ca_Astro" in track_variables, N)
         self.Ca_stored = Variable("Stored calcium", "uM", Ca_stored, init, "Ca_stored" in track_variables, N)
@@ -223,8 +223,8 @@ class Variables:
         self.IP3 = Variable("IP3 concentration (Astrocyte)", "uM", IP3, init, "IP3" in track_variables, N)
         self.h = Variable("Inhibition parameter (IP3 production)", "uM", h, init, "h" in track_variables, N)
         self.mutual_information = Variable("Mutual information", "bits/sec", mutual_information, init, "mutual_information" in track_variables, N)
-        self.entropy_v = Variable("Entropy of vesicle release", "bits/sec", entropy_v, init, "entropy_v" in track_variables, N)
-        self.conditional_entropy = Variable("Conditional Entropy of vesicle release given AP", "bits/sec", cond_entropy, init, "conditional_entropy" in track_variables, N)
+        #self.entropy_v = Variable("Entropy of vesicle release", "bits/sec", entropy_v, init, "entropy_v" in track_variables, N)
+        #self.conditional_entropy = Variable("Conditional Entropy of vesicle release given AP", "bits/sec", cond_entropy, init, "conditional_entropy" in track_variables, N)
 
     def initializeArrays(self, N):
         for k, v in self:
@@ -270,7 +270,7 @@ class Simulator:
         self.s = simulation_parameters
         self.noise = noise
 
-    def iterateVariables(self, track_variables) -> Variables:
+    def iterateVariables(self, track_variables, valueRand) -> Variables:
         N = self.s.N
         time_step = self.s.time_step
         var = Variables(N, track_variables)
@@ -287,7 +287,8 @@ class Simulator:
         v_ref_count = int(self.p.t_ref_v/time_step)
         var.N_v.initialize(self.p.N_v_max)
         var.IP3.initialize(160e-3) #uM (equilibrium concentration) #(0.421021) 
-        var.h.initialize(np.random.random() if self.noise.h_init_random else 0.705339) #0.705339 valore di salto
+        #var.h.initialize(np.random.random() if self.noise.h_init_random else 0.705339) #0.705339 valore di salto
+        var.h.initialize(valueRand if self.noise.h_init_random else 0.705339) #0.705339 valore di salto
         var.ap_ready_prob.initialize(1)
 
         T_info = int(0.2/time_step)
@@ -327,7 +328,7 @@ class Simulator:
                 var.S.set(1, i)
                 last_spike = i
                 if (self.noise.axonal):
-                    ap_duration_count = int((self.p.spike_duration/time_step)*(1 + np.random.normal(0, self.noise.AP_width_CV)))
+                    ap_duration_count = int(np.round((self.p.spike_duration/time_step)*(1 + np.random.normal(0, self.noise.AP_width_CV))))
                 var.u.set(self.p.hyperp_v, i)
             
             func = lambda p: lib.updateProbSpikeReady(p, (var.spike_probability_a_priori.get(i-1) if i>=1 else 0), (var.spike_probability_a_priori.get(i-s_ref_count) if i >= s_ref_count else 0))
@@ -446,8 +447,12 @@ class Simulator:
         N = self.s.N
         var_sum = Variables(N, track_variables) 
 
+        f = open("random", "rb")
+        list = pickle.load(f)
+        f.close()
+
         for i in range(1, N_iterations + 1):
-            var_sum += self.iterateVariables(track_variables)
+            var_sum += self.iterateVariables(track_variables, list[i-1])
             if (save == True and (i%save_each==0 or i == N_iterations)):
                 saveResults(self.s, self.p, var_sum/i)
 
