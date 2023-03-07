@@ -125,7 +125,7 @@ def Ca_ER(Ca):
     return (c0 - Ca)/c1
 
 def updateInhibitionParameter (previous, IP3, Ca_Astro, time_step):
-    N_IP3Rs = 20 #numero di canali
+    N_IP3Rs = 20 #IP3Rs cluster size (Swillens et al., 1999)
     a2 = 0.2 #(uM s)^(-1)
     d2 = 1.049 #uM
     d1 = 0.13 #uM
@@ -134,7 +134,7 @@ def updateInhibitionParameter (previous, IP3, Ca_Astro, time_step):
     beta = a2*Ca_Astro
     delta_q = alpha*(1-previous)-beta*previous
     strength = alpha*(1-previous)+beta*previous
-    delta_q += np.random.normal(0, (strength/N_IP3Rs)**0.5)
+    delta_q += np.random.normal(0, (strength/N_IP3Rs)**0.5) # Langevin approach
 
     return delta_q*time_step + previous
 
