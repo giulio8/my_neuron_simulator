@@ -388,7 +388,7 @@ class Simulator:
             
             
             if (i - last_release >= v_ref_count): # Check if vesicle release machinery is ready
-                var.release_rate.set(var.spike_rate.get(i)*var.open_prob.get(i), i) # Rate: has meaning as a joint probability
+                var.release_rate.set(var.spike_rate.get(i)*var.open_prob.get(i), i)
                 # open_prob => Probability of having one release during the AP, with N=1
                 release_prob_1_c1 = (1 - var.open_prob.get(i))**(1/ap_duration_count)
                 release_prob_during_AP = 1 - release_prob_1_c1**var.N_v.get(i)  # P(V[n]=1 | S[n]=1)

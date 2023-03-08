@@ -377,9 +377,10 @@ class Simulator:
             
             
             if (i - last_release >= v_ref_count): # Check if vesicle release machinery is ready
-                var.release_rate.set(var.spike_rate.get(i)*var.open_prob.get(i), i) # Evoked release Rate
+                var.release_rate.set(var.spike_rate.get(i)*var.open_prob.get(i), i)
                 # open_prob => Probability of having one release during the AP, with N=1
-                release_prob_during_AP = lib.poisson(var.N_v.get(i)*var.release_rate.get(i), time_step)  # P(V[n]=1 | S[n]=1)
+                release_prob_1_c1 = (1 - var.open_prob.get(i))**(1/ap_duration_count)
+                release_prob_during_AP = 1 - release_prob_1_c1**var.N_v.get(i)  # P(V[n]=1 | S[n]=1)
                 # probability of having one release without an AP
                 spontaneous_rate = lib.spontaneousRate(var.Ca_pre.get(i))
                 release_prob_no_AP = lib.poisson(var.N_v.get(i)*spontaneous_rate, time_step) if self.noise.spontaneous_release and var.N_v.get(i) > 0 else 0   # P(V[n]=1 | S[n]=0)
