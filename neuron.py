@@ -2,6 +2,7 @@ import numpy as np
 import lib
 import pickle
 import copy
+from AP_VGCC_dynamics import AP, VGCC
 #prova
 units = {
         "membrane_tau": "s",
@@ -288,9 +289,20 @@ class Simulator:
 
         T_info = int(0.2/time_step)
 
+        ap_obj = AP.Spike(
+            total_width=4,
+            t_peak=0.5,
+            t_under=2,
+            v_rest=-65,
+            v_peak=40,
+            v_under=-80
+        )
+        fst_Ca_obj = VGCC.fastCalcium(ap_obj, (1000*time_step), 100)
+        Ca_AP_avg, Ca_AP_std = fst_Ca_obj.getCalcium()
+
 
         glutamate_clearance_time = 2e-3 #s
-        glu_duration_count = int(glutamate_clearance_time/time_step)
+        glu_duration_count = int(glutamate_clearance_time/(time_step))
         glu_active = False
         m_info_delta_T_sum = 0
 
@@ -327,9 +339,10 @@ class Simulator:
                 var.u.set(self.p.hyperp_v, i)
 
 
-            # Presynaptic Calcium stays fixed to 300uM during an AP
+            # Presynaptic Calcium stays fixed to 300uM during an AP #
+            # NO => prova calcio
             if (i - last_spike < ap_duration_count):
-                Ca_AP = 300
+                Ca_AP = 10e6*np.random.normal(Ca_AP_avg[i - last_spike], Ca_AP_std[i - last_spike])
                 spike_active = True
             else:
                 Ca_AP = 0
@@ -361,7 +374,8 @@ class Simulator:
                 var.IP3.update(i, funcIP3)
                 funch = lambda h: lib.updateInhibitionParameter(h, var.IP3.get(i-1), var.Ca_Astro.get(i-1), time_step)
                 var.h.update(i, funch)
-            var.Ca_pre.set(Ca_AP+var.Ca_stored.get(i), i)
+            Ca_pre_tot = Ca_AP+var.Ca_stored.get(i) if Ca_AP+var.Ca_stored.get(i) > 0 else 0
+            var.Ca_pre.set(Ca_pre_tot, i)
 
             #Vesicle release dynamics
             open_prob_temp = 1
@@ -371,9 +385,9 @@ class Simulator:
                 probs = np.array([var.site_probabilities[0].get(i), var.site_probabilities[1].get(i), var.site_probabilities[2].get(i), var.site_probabilities[3].get(i)])
                 new_probs = lib.updateSitesProbabilities(probs, var.Ca_pre.get(i), time_step)
             for j in range(4):
-                var.site_probabilities[j].set(new_probs[j], i)
+                var.site_probabilities[j].set(new_probs[j] if new_probs[j] < 1 else 1, i)
                 open_prob_temp *= var.site_probabilities[j].get(i)
-            var.open_prob.set(open_prob_temp, i)
+            var.open_prob.set(open_prob_temp if open_prob_temp > 0 else 0, i)
             
             
             if (i - last_release >= v_ref_count): # Check if vesicle release machinery is ready
@@ -402,14 +416,15 @@ class Simulator:
                 release_prob_no_AP = 0
 
             # Mutual information
-            mutual_information = lib.mutualInformation(var.spike_probability.get(i), release_prob_during_AP, release_prob_no_AP) #bits in one single time step
-            if (i % T_info == 0):
+            #mutual_information = lib.mutualInformation(var.spike_probability.get(i), release_prob_during_AP, release_prob_no_AP) #bits in one single time step
+            var.mutual_information.set(lib.mutualInformation(var.spike_probability.get(i), release_prob_during_AP, release_prob_no_AP), i)
+            """if (i % T_info == 0):
                 prev = var.mutual_information.get(i-T_info)
                 succ = m_info_delta_T_sum/T_info/time_step
                 for j, value in enumerate(np.linspace(prev, succ, T_info)):
                     var.mutual_information.set(value, i-T_info+j+1) # bits/sec
                 m_info_delta_T_sum = 0
-            m_info_delta_T_sum += mutual_information
+            m_info_delta_T_sum += mutual_information"""
 
             # Variable set to state variables
             var.ap_duration_count.set(ap_duration_count, i)

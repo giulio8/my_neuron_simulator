@@ -7,11 +7,14 @@ def myPlotFigure (common_axis:plt.Axes, xaxis, yaxis, title, unitLabel="", label
     if (nplots > 1):
         for i in range(nplots):
             if (labels != None):
-                common_axis.plot(xaxis, yaxis[i], label=labels[i], linewidth="0.5")
+                y = yaxis[i] if len(yaxis.shape) == 1 else yaxis[i, :]
+                common_axis.plot(xaxis, y, label=labels[i], linewidth="0.5")
             else:
-                common_axis.plot(xaxis, yaxis[i], linewidth="0.5")
+                y = yaxis[i] if len(yaxis.shape) == 1 else yaxis[i, :]
+                common_axis.plot(xaxis, y, linewidth="0.5")
     else:
-        common_axis.plot(xaxis, yaxis, linewidth="0.5")
+        y = np.reshape(yaxis, (yaxis.size,))
+        common_axis.plot(xaxis, y, linewidth="0.5")
 
     if (labels != None):
         common_axis.legend()
@@ -40,14 +43,14 @@ def drawFigure(simulation_time, time_step, variables: neuron.Variables, time_win
 
     if (n_plots == 1):
         if (n_drawings > 1):
-            for idx, (ax, (key, variable)) in enumerate(zip(axes.flat, variables_to_plot)):
+            for ax, (key, variable) in zip(axes.flat, variables_to_plot):
                 myPlotFigure(ax, t_axis, variable.value, variable.title, variable.unit)
         else:
             el = variables_to_plot.__iter__().__next__()[1]
             myPlotFigure(axes, t_axis, el.value, el.title, el.unit)
     else:
         if (n_drawings > 1):
-            for idx, (ax, (key, variable)) in enumerate(zip(axes.flat, variables_to_plot)):
+            for ax, (key, variable) in zip(axes.flat, variables_to_plot):
                 myPlotFigure(ax, t_axis, variable.value, variable.title, variable.unit, labels=labels, 
                              nplots = n_plots
                              )
