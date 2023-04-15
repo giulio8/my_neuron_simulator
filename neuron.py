@@ -3,7 +3,7 @@ import lib
 import pickle
 import copy
 from AP_VGCC_dynamics import AP, VGCC
-#prova
+
 units = {
         "membrane_tau": "s",
         "spike_duration": "s",
@@ -102,13 +102,14 @@ class SimulationParameters:
 
 class Noise:
     def __init__(self, thermal=False, axonal=False, AP_width_CV=0, escape=True, spontaneous_release=True,
-                 h_init_random=True) -> None:
+                 h_init_random=True, VGCC=False) -> None:
         self.thermal = thermal
         self.AP_width_CV = AP_width_CV
         self.axonal = axonal
         self.escape = escape
         self.spontaneous_release = spontaneous_release
         self.h_init_random = h_init_random
+        self.VGCC = VGCC
 
     def __str__(self) -> str:
         string = ""
@@ -287,18 +288,13 @@ class Simulator:
         #var.h.initialize(np.random.random() if self.noise.h_init_random else 0.705339) #0.705339 valore di salto
         var.h.initialize(valueRand if self.noise.h_init_random else 0.705339) #0.705339 valore di salto
 
-        T_info = int(0.2/time_step)
+        T_info = int(0.02/time_step)
 
-        ap_obj = AP.Spike(
-            total_width=4,
-            t_peak=0.5,
-            t_under=2,
-            v_rest=-65,
-            v_peak=40,
-            v_under=-80
-        )
-        fst_Ca_obj = VGCC.fastCalcium(ap_obj, (1000*time_step), 100)
-        Ca_AP_avg, Ca_AP_std = fst_Ca_obj.getCalcium()
+        if (self.noise.VGCC):
+            f = open("AP_VGCC_dynamics/calcium_data", "rb")
+            Ca_data = pickle.load(f)
+            Ca_AP_avg = Ca_data["mean"]
+            Ca_AP_std = Ca_data["std"]
 
 
         glutamate_clearance_time = 2e-3 #s
@@ -339,10 +335,12 @@ class Simulator:
                 var.u.set(self.p.hyperp_v, i)
 
 
-            # Presynaptic Calcium stays fixed to 300uM during an AP #
-            # NO => prova calcio
+            # Presynaptic Calcium stays fixed to 300uM during an AP when VGCC noise is turned off#
             if (i - last_spike < ap_duration_count):
-                Ca_AP = 10e6*np.random.normal(Ca_AP_avg[i - last_spike], Ca_AP_std[i - last_spike])
+                if (self.noise.VGCC):
+                    Ca_AP = 1e6*np.random.normal(Ca_AP_avg[i - last_spike], Ca_AP_std[i - last_spike])
+                else:
+                    Ca_AP = 300
                 spike_active = True
             else:
                 Ca_AP = 0
@@ -416,15 +414,15 @@ class Simulator:
                 release_prob_no_AP = 0
 
             # Mutual information
-            #mutual_information = lib.mutualInformation(var.spike_probability.get(i), release_prob_during_AP, release_prob_no_AP) #bits in one single time step
-            var.mutual_information.set(lib.mutualInformation(var.spike_probability.get(i), release_prob_during_AP, release_prob_no_AP), i)
-            """if (i % T_info == 0):
+            mutual_information = lib.mutualInformation(var.spike_probability.get(i), release_prob_during_AP, release_prob_no_AP) #bits in one single time step
+            #var.mutual_information.set(lib.mutualInformation(var.spike_probability.get(i), release_prob_during_AP, release_prob_no_AP), i)
+            if (i % T_info == 0):
                 prev = var.mutual_information.get(i-T_info)
                 succ = m_info_delta_T_sum/T_info/time_step
                 for j, value in enumerate(np.linspace(prev, succ, T_info)):
                     var.mutual_information.set(value, i-T_info+j+1) # bits/sec
                 m_info_delta_T_sum = 0
-            m_info_delta_T_sum += mutual_information"""
+            m_info_delta_T_sum += mutual_information
 
             # Variable set to state variables
             var.ap_duration_count.set(ap_duration_count, i)
@@ -433,13 +431,13 @@ class Simulator:
                 for j in range(T_info):
                     var.ap_duration_count.set(ap_duration_count_sum/T_info/time_step, i-j) # bits/sec
                 ap_duration_count_sum = 0
-            ap_duration_count_sum += ap_duration_count
+            ap_duration_count_sum += ap_duration_count"""
 
-        max = np.argmax(np.diff(var.Ca_pre, n=2))
+        max = np.argmax(np.diff(var.Ca_pre.value, n=2))
         print("stacchi: Ca_pre: %f, Ca_Astro: %f, Ca_stored: %f, IP3: %f, glu: %f, h: %f"
         "al tempo %fs"
-        % (var.Ca_pre[max], var.Ca_Astro[max], var.Ca_stored[max], var.IP3[max], var.glu[max], h_temp[max],
-        time_step*max))"""
+        % (var.Ca_pre.value[max], var.Ca_Astro.value[max], var.Ca_stored.value[max], var.IP3.value[max], var.glu.value[max], var.h.value[max],
+        time_step*max))
         return var
 
     def simulate(self, track_variables, N_iterations = None, save=True, save_each=5) -> Variables:

@@ -1,8 +1,8 @@
 import numpy as np
 
-alpha = [4.04, 6.7, 4.39, 17.33, 0] #ms^(-1)
-beta = [0, 2.88, 6.39, 8.16, 1.84] #ms^(-1)
-v_ref = [0, 49.14, 42.08, 55.31, 26.55, 0] #mV
+alpha = np.array([4.04, 6.7, 4.39, 17.33, 0])*1e3 #s^(-1)
+beta = np.array([0, 2.88, 6.39, 8.16, 1.84])*1e3 #s^(-1)
+v_ref = np.array([0, 49.14, 42.08, 55.31, 26.55, 0])*1e-3 #V
 conductance = 2.7 #pS
 n_ch = 22
 
@@ -37,7 +37,7 @@ def updateState(previous, v, time_step):
 
 def influx(open_prob, v, noise, time_step):
     Ca = Ca_in(v)
-    par_fitting = 0.524
+    par_fitting = 1.524
     if (noise["active"]):
         if (np.random.rand() < 0.5):
             xi = -np.abs(np.random.normal(0, noise["an"]*(open_prob*Ca)**0.5))
@@ -48,14 +48,13 @@ def influx(open_prob, v, noise, time_step):
     return par_fitting*(n_ch*open_prob*Ca*time_step + xi)
 
 def Ca_in(v):
-    base_voltage = 55 #mV
+    base_voltage = 55*1e-3 #V
     z = 2
     e = 1.602e-19 #C
-    Ca_molecules = conductance*(base_voltage - v)/(z*e)*1e-15 #pS*mV=fA=10^(-15)A
+    Ca_molecules = conductance*(base_voltage - v)/(z*e)*1e-12 #pS*V=pA=10^(-12)A
     return Ca_molecules
 
 def CalciumMoleculesToConcentration(molecules):
-    nA = 6.022e23
-    Vbtn = 0.13e-18 #m^3
-    m3_to_L = 1e3
-    return molecules/nA/(Vbtn*m3_to_L)
+    nA = 6.022e23 
+    Vbtn = 0.13e-15 #L
+    return molecules/nA/Vbtn
