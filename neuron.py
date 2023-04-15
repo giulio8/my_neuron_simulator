@@ -13,7 +13,6 @@ units = {
         "R": "ohm",
         "threshold": "V",
         "Urest": "V",
-        "Threshold_rest": "V",
         "hyperp_v": "V",
         "hyperp_tau": "s",
         "vesicles_replenishment_time": "s",
@@ -28,23 +27,20 @@ units = {
     }
 
 class Properties:
-    def __init__(self, membrane_tau, spike_duration, t_ref_s, t_ref_v, C, threshold,
-    LTP_active = True, STD_active = True, Urest = -62.5e-3, Threshold_rest = -48.9e-3, 
-    hyperp_v = -74.7e-3, hyperp_tau = 80e-3, N_v_max = 10, glutamate_clearance_time=0):
+    def __init__(self, membrane_tau, ap: AP.Spike, t_ref_s, t_ref_v, C,
+    LTP_active = True, STD_active = True, N_v_max = 10, glutamate_clearance_time=2):
 
         self.membrane_tau = membrane_tau
-        self.spike_duration = spike_duration
+        self.spike_duration = ap.t_under
         self.C = C,
         self.R = membrane_tau/C
         self.t_ref_s = t_ref_s # absolute refractary period after one AP
         self.t_ref_v = t_ref_v # absolute refractary period of release vesicle machinery
         self.LTP_active = LTP_active   # set to False to inactivate astrocytic feedback
         self.STD_active = STD_active # set to False to have vesicle immediately recover
-        self.Urest = Urest
-        self.threshold = threshold
-        self.Threshold_rest = Threshold_rest
-        self.hyperp_v = hyperp_v
-        self.hyperp_tau = hyperp_tau
+        self.Urest = ap.v_rest
+        self.threshold = ap.v_thresh
+        self.hyperp_v = ap.v_under
         self.N_v_max = N_v_max
         self.vesicles_replenishment_time = 0.6/N_v_max #s, 0.6/N_v_max   active if STD_active==True
         self.glutamate_clearance_time = glutamate_clearance_time
@@ -291,10 +287,21 @@ class Simulator:
         T_info = int(0.02/time_step)
 
         if (self.noise.VGCC):
-            f = open("AP_VGCC_dynamics/calcium_data", "rb")
+            """f = open("AP_VGCC_dynamics/calcium_data", "rb")
             Ca_data = pickle.load(f)
             Ca_AP_avg = Ca_data["mean"]
-            Ca_AP_std = Ca_data["std"]
+            Ca_AP_std = Ca_data["std"]"""
+            ap_obj = AP.Spike(
+                    total_width=4e-3,
+                    t_peak=0.5e-3,
+                    t_under=2e-3,
+                    v_thresh=-34.3e-3,
+                    v_rest=-65e-3,
+                    v_peak=40e-3,
+                    v_under=-80e-3
+                )
+            fst_Ca_obj = VGCC.fastCalcium(ap_obj, time_step)
+            Ca_AP_avg, Ca_AP_std = fst_Ca_obj.simulateStatistics(N_ITER=100)
 
 
         glutamate_clearance_time = 2e-3 #s
@@ -330,9 +337,13 @@ class Simulator:
             if (i - last_spike >= s_ref_count and var.spike_probability.get(i) > rand):
                 var.S.set(1, i)
                 last_spike = i
+                # AP waveform pasted
+                for j, voltage in enumerate(fst_Ca_obj.spike_pulse.getValues()):
+                    if (i+j < N):
+                        var.u.set(voltage, i+j)
                 if (self.noise.axonal):
                     ap_duration_count = int(np.round((self.p.spike_duration/time_step)*(1 + np.random.normal(0, self.noise.AP_width_CV))))
-                var.u.set(self.p.hyperp_v, i)
+                #var.u.set(self.p.hyperp_v, i)
 
 
             # Presynaptic Calcium stays fixed to 300uM during an AP when VGCC noise is turned off#
@@ -431,13 +442,13 @@ class Simulator:
                 for j in range(T_info):
                     var.ap_duration_count.set(ap_duration_count_sum/T_info/time_step, i-j) # bits/sec
                 ap_duration_count_sum = 0
-            ap_duration_count_sum += ap_duration_count"""
+            ap_duration_count_sum += ap_duration_count
 
         max = np.argmax(np.diff(var.Ca_pre.value, n=2))
         print("stacchi: Ca_pre: %f, Ca_Astro: %f, Ca_stored: %f, IP3: %f, glu: %f, h: %f"
         "al tempo %fs"
         % (var.Ca_pre.value[max], var.Ca_Astro.value[max], var.Ca_stored.value[max], var.IP3.value[max], var.glu.value[max], var.h.value[max],
-        time_step*max))
+        time_step*max))"""
         return var
 
     def simulate(self, track_variables, N_iterations = None, save=True, save_each=5) -> Variables:

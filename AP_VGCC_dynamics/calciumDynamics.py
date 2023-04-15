@@ -37,7 +37,7 @@ def updateState(previous, v, time_step):
 
 def influx(open_prob, v, noise, time_step):
     Ca = Ca_in(v)
-    par_fitting = 1.524
+    par_fitting = 1.42
     if (noise["active"]):
         if (np.random.rand() < 0.5):
             xi = -np.abs(np.random.normal(0, noise["an"]*(open_prob*Ca)**0.5))
@@ -48,7 +48,7 @@ def influx(open_prob, v, noise, time_step):
     return par_fitting*(n_ch*open_prob*Ca*time_step + xi)
 
 def Ca_in(v):
-    base_voltage = 55*1e-3 #V
+    base_voltage = 55e-3 #V
     z = 2
     e = 1.602e-19 #C
     Ca_molecules = conductance*(base_voltage - v)/(z*e)*1e-12 #pS*V=pA=10^(-12)A
