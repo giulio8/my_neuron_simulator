@@ -37,7 +37,7 @@ def updateState(previous, v, time_step):
 
 def influx(open_prob, v, noise, time_step):
     Ca = Ca_in(v)
-    par_fitting = 1.42
+    par_fitting = 0.62
     if (noise["active"]):
         if (np.random.rand() < 0.5):
             xi = -np.abs(np.random.normal(0, noise["an"]*(open_prob*Ca)**0.5))

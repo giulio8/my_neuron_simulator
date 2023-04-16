@@ -3,6 +3,7 @@ import lib
 import pickle
 import copy
 from AP_VGCC_dynamics import AP, VGCC
+import importlib
 
 units = {
         "membrane_tau": "s",
@@ -282,26 +283,26 @@ class Simulator:
         var.N_v.initialize(self.p.N_v_max)
         var.IP3.initialize(160e-3) #uM (equilibrium concentration) #(0.421021) 
         #var.h.initialize(np.random.random() if self.noise.h_init_random else 0.705339) #0.705339 valore di salto
-        var.h.initialize(valueRand if self.noise.h_init_random else 0.705339) #0.705339 valore di salto
+        var.h.initialize(valueRand if self.noise.h_init_random else 0) #0.705339 valore di salto
 
         T_info = int(0.02/time_step)
-
+            
+        ap_obj = AP.Spike(
+                total_width=4e-3,
+                t_peak=0.5e-3,
+                t_under=2e-3,
+                v_thresh=-34.3e-3,
+                v_rest=-65e-3,
+                v_peak=40e-3,
+                v_under=-80e-3
+            )
+        fst_Ca_obj = VGCC.fastCalcium(ap_obj, time_step)
         if (self.noise.VGCC):
+            Ca_AP_avg, Ca_AP_std = fst_Ca_obj.simulateStatistics(N_ITER=100)
             """f = open("AP_VGCC_dynamics/calcium_data", "rb")
             Ca_data = pickle.load(f)
             Ca_AP_avg = Ca_data["mean"]
             Ca_AP_std = Ca_data["std"]"""
-            ap_obj = AP.Spike(
-                    total_width=4e-3,
-                    t_peak=0.5e-3,
-                    t_under=2e-3,
-                    v_thresh=-34.3e-3,
-                    v_rest=-65e-3,
-                    v_peak=40e-3,
-                    v_under=-80e-3
-                )
-            fst_Ca_obj = VGCC.fastCalcium(ap_obj, time_step)
-            Ca_AP_avg, Ca_AP_std = fst_Ca_obj.simulateStatistics(N_ITER=100)
 
 
         glutamate_clearance_time = 2e-3 #s
@@ -341,6 +342,8 @@ class Simulator:
                 for j, voltage in enumerate(fst_Ca_obj.spike_pulse.getValues()):
                     if (i+j < N):
                         var.u.set(voltage, i+j)
+                if (self.noise.VGCC):
+                    fst_Ca_obj.simulateAP(unit="µM")
                 if (self.noise.axonal):
                     ap_duration_count = int(np.round((self.p.spike_duration/time_step)*(1 + np.random.normal(0, self.noise.AP_width_CV))))
                 #var.u.set(self.p.hyperp_v, i)
@@ -349,7 +352,8 @@ class Simulator:
             # Presynaptic Calcium stays fixed to 300uM during an AP when VGCC noise is turned off#
             if (i - last_spike < ap_duration_count):
                 if (self.noise.VGCC):
-                    Ca_AP = 1e6*np.random.normal(Ca_AP_avg[i - last_spike], Ca_AP_std[i - last_spike])
+                    #Ca_AP = 1e6*np.random.normal(Ca_AP_avg[i - last_spike], Ca_AP_std[i - last_spike])
+                    Ca_AP = fst_Ca_obj.Ca_conc[i - last_spike]
                 else:
                     Ca_AP = 300
                 spike_active = True
@@ -452,6 +456,7 @@ class Simulator:
         return var
 
     def simulate(self, track_variables, N_iterations = None, save=True, save_each=5) -> Variables:
+        importlib.reload(VGCC)
         if (N_iterations == None):
             N_iterations = self.s.N_iterations
         

@@ -16,22 +16,30 @@ class fastCalcium:
         }
 
     def simulateAP(self, unit="M"):
+
         site_probs = np.zeros((5, self.N))
         site_probs[0, 0] = 0.1
         influx = np.zeros(self.N)
-        Ca_VGCCs = np.zeros(self.N)
+        self.Ca_VGCCs = np.zeros(self.N)
 
         decaying_k = 0.8
         for i in range(1, self.N):
             site_probs[:, i] = CD.updateState(site_probs[:, i-1], self.v[i], self.time_step)
             influx[i] = CD.influx(site_probs[4, i-1], self.v[i], self.ap_noise, self.time_step)
-            Ca_VGCCs[i] = Ca_VGCCs[i-1]*decaying_k + influx[i]
+            tmp = self.Ca_VGCCs[i-1]*decaying_k + influx[i]
+            if (tmp > 0):
+                self.Ca_VGCCs[i] = self.Ca_VGCCs[i-1]*decaying_k + influx[i]
+            else:
+                self.Ca_VGCCs[i] = 0
 
         if (unit == "M"):
-            return CD.CalciumMoleculesToConcentration(Ca_VGCCs)
+            self.Ca_conc = CD.CalciumMoleculesToConcentration(self.Ca_VGCCs)
+            return self.Ca_conc
         elif (unit == "µM"):
-            return 1e6*CD.CalciumMoleculesToConcentration(Ca_VGCCs)
-        return Ca_VGCCs
+            self.Ca_conc = 1e6*CD.CalciumMoleculesToConcentration(self.Ca_VGCCs)
+            return self.Ca_conc
+        else:
+            return self.Ca_VGCCs
 
     def simulateStatistics(self, N_ITER):
         Ca_VGCCs = np.zeros((N_ITER, self.N))
