@@ -1,9 +1,11 @@
 import numpy as np
+import matplotlib.pyplot as plt
 import lib
 import pickle
 import copy
 from AP_VGCC_dynamics import AP, VGCC
 import importlib
+import axon
 
 units = {
         "membrane_tau": "s",
@@ -62,14 +64,17 @@ class SimulationParameters:
         "current": "A",
         "f_current": "Hz",
         "lambda_": "Hz",
-        "N_iterations": ""
+        "N_iterations": "",
+        "init_25s": ""
     }
     def __init__(self, time_step, simulation_time, temperature, DiffEq=False,
-    current_amplitude=0, current_type="DC", f_current=0, N_iterations=1) -> None:
+    current_amplitude=0, current_type="DC", f_current=0, init_25s=False, init_N=0, N_iterations=1) -> None:
         self.time_step = time_step
         self.DiffEq = DiffEq
         self.simulation_time = simulation_time
         self.temperature = temperature
+        self.init_25s = init_25s
+        self.init_N = init_N
         self.N = int(np.ceil(simulation_time/time_step))
         self.lambda_fixed = False
         if (current_type == "DC"): # Use a DC current of 1.5uA
@@ -98,8 +103,8 @@ class SimulationParameters:
         return string
 
 class Noise:
-    def __init__(self, thermal=False, axonal=False, AP_width_CV=0, escape=True, spontaneous_release=True,
-                 h_init_random=True, VGCC=False) -> None:
+    def __init__(self, thermal=False, axonal=None, AP_width_CV=0, escape=True, spontaneous_release=True,
+                 h_init_random=True, VGCC=False, Astro=False, astro_release_rate=0) -> None:
         self.thermal = thermal
         self.AP_width_CV = AP_width_CV
         self.axonal = axonal
@@ -107,6 +112,8 @@ class Noise:
         self.spontaneous_release = spontaneous_release
         self.h_init_random = h_init_random
         self.VGCC = VGCC
+        self.Astro = Astro
+        self.astro_release_rate = astro_release_rate
 
     def __str__(self) -> str:
         string = ""
@@ -192,18 +199,21 @@ class Variable:
 class Variables:
 
     
-    def __init__(self, N, track_variables=None, init=True, u=0, spike_rate=0, spike_probability=0, open_prob=0, S=0, release_rate=0,
-    release_vector=0, N_v=0, ap_duration_count=0, Ca_pre=0, Ca_Astro=0, Ca_stored=0, site_probabilities=np.zeros(4),
+    def __init__(self, N, track_variables=None, init=True, u=0, u_pre=0, spike_rate=0, spike_probability=0, open_prob=0, S=0, S_pre=0, release_rate=0,
+    release_vector=0, spont_release=0, N_v=0, ap_duration_count=0, Ca_pre=0, Ca_Astro=0, Ca_stored=0, site_probabilities=np.zeros(4),
     release_prob=0, release_prob_a_posteriori=0, glu=0, IP3=0, h=0, mutual_information=0) -> None:
         self.track_variables = track_variables
         self.N = N
-        self.u = Variable("Membrane voltage", "V", u, init, "u" in track_variables, N)
+        self.u_pre = Variable("Membrane voltage before axon", "V", u_pre, init, True, N)
+        self.u = Variable("Membrane voltage", "V", u, init, True, N)
         self.spike_rate = Variable("Spike rate", "Hz", spike_rate, init, "spike_rate" in track_variables, N)
         self.spike_probability = Variable("Spike probability", "", spike_probability, init, "spike_probability" in track_variables, N)
         self.open_prob = Variable("Open probability", "", open_prob, init, "open_prob" in track_variables, N)
-        self.S = Variable("Action potentials", "", S, init, "S" in track_variables, N, dtype=np.int16)
+        self.S_pre = Variable("Action potentials before axon", "", S_pre, init, True, N, dtype=np.int16)
+        self.S = Variable("Action potentials", "", S, init, True, N, dtype=np.int16)
         self.release_rate = Variable("Release rate", "Hz", release_rate, init, "release_rate" in track_variables, N)
         self.release_vector = Variable("Vesicles released", "", release_vector, init, "release_vector" in track_variables, N, dtype=np.int16)
+        self.spont_release = Variable("Vesicles released", "", spont_release, init, "spont_release" in track_variables, N, dtype=np.int16)
         self.N_v = Variable("Vesicle in Ready pool", "", N_v, init, "N_v" in track_variables, N, dtype=np.int16)
         self.ap_duration_count = Variable("AP width, normalized w.r.t. deltaT", "", ap_duration_count, init, "ap_duration_count" in track_variables, N, dtype=np.int16)
         self.Ca_pre = Variable("Presynaptic calcium", "uM", Ca_pre, init, "Ca_pre" in track_variables, N)
@@ -212,11 +222,11 @@ class Variables:
         self.site_probabilities = []
         for i in range(4):
            self.site_probabilities.append(Variable("Active site channel " + str(i) + " opening probability", "", site_probabilities[i], init, "site_probabilities" in track_variables, N))
-        self.release_prob = Variable("Vesicle release probability", "", release_prob, init, "release_prob" in track_variables, N)
-        self.release_prob_a_posteriori = Variable("Vesicle release probability a posteriori w.r.t. AP", "", release_prob_a_posteriori, init, "release_prob_a_posteriori" in track_variables, N)
+        self.release_prob = Variable("Vesicle release probability a priori", "", release_prob, init, "release_prob" in track_variables, N)
+        self.release_prob_a_posteriori = Variable("Vesicle release probability", "", release_prob_a_posteriori, init, "release_prob_a_posteriori" in track_variables, N)
         self.glu = Variable("Glutamate available for Astrocytic mGlur binding", "uM", glu, init, "glu" in track_variables, N)
         self.IP3 = Variable("IP3 concentration (Astrocyte)", "uM", IP3, init, "IP3" in track_variables, N)
-        self.h = Variable("Inhibition parameter (IP3 production)", "uM", h, init, "h" in track_variables, N)
+        self.h = Variable("IP3R gating variable", "", h, init, "h" in track_variables, N)
         self.mutual_information = Variable("Mutual information", "bits/sec", mutual_information, init, "mutual_information" in track_variables, N)
         #self.entropy_v = Variable("Entropy of vesicle release", "bits/sec", entropy_v, init, "entropy_v" in track_variables, N)
         #self.conditional_entropy = Variable("Conditional Entropy of vesicle release given AP", "bits/sec", cond_entropy, init, "conditional_entropy" in track_variables, N)
@@ -271,19 +281,23 @@ class Simulator:
         var = Variables(N, track_variables)
         # states "init", "AP", "Spike-AfterPotential"
         state = "init"
-        var.u.initialize(self.p.Urest)
+        var.u.setAllTo(N, self.p.Urest)
+        var.u_pre.setAllTo(N, self.p.Urest)
         var.ap_duration_count.initialize(int(self.p.spike_duration/time_step))
         #ap_duration_count_sum = 0
         ap_duration_count = var.ap_duration_count.get(0)
         spike_active = False #we'll set this to True during an AP
         last_spike = -np.Inf
         last_release = -np.Inf
+        if (self.noise.Astro):
+            last_astro_release = -np.Inf
+            astro_release_prob = lib.poisson(1000*self.noise.astro_release_rate, time_step)
         s_ref_count = int(self.p.t_ref_s/time_step)
         v_ref_count = int(self.p.t_ref_v/time_step)
-        var.N_v.initialize(self.p.N_v_max)
-        var.IP3.initialize(160e-3) #uM (equilibrium concentration) #(0.421021) 
-        #var.h.initialize(np.random.random() if self.noise.h_init_random else 0.705339) #0.705339 valore di salto
-        var.h.initialize(valueRand if self.noise.h_init_random else 0) #0.705339 valore di salto
+        var.N_v.initialize(self.s.init_N)
+        var.IP3.initialize(160e-3 if self.s.init_25s == False else 0.421021) #uM (equilibrium concentration) #(0.421021) 
+        var.Ca_Astro.initialize(0 if self.s.init_25s == False else 0.2)
+        var.h.initialize(valueRand if self.noise.h_init_random else (0.705339 if self.s.init_25s else 0)) #0.705339 valore di salto
 
         T_info = int(0.02/time_step)
             
@@ -314,13 +328,13 @@ class Simulator:
             var.spike_rate.setAllTo(N, self.s.lambda_)
             var.spike_probability.setAllTo(N, lib.poisson(var.spike_rate.get(0), time_step))
 
+        # SRM
         for i in range(1, N):
-            
             # Voltage
             #if ((state == "init" or state == "Spike-AfterPotential") and self.s.lambda_fixed == False):
             if (self.s.lambda_fixed == False):
                 func = lambda u: lib.updateVoltage(u, self.s.current[i], self.p.C, self.p.Urest, self.p.membrane_tau, time_step, self.noise.thermal, self.s.temperature, self.p.R)
-                var.u.update(i, func)
+                var.u_pre.update(i, func)
             #elif (state == "AP"):
                 #state = "Spike-AfterPotential"
             """elif (state == "Spike-AfterPotential"):
@@ -329,23 +343,37 @@ class Simulator:
 
             if (self.s.lambda_fixed == False):
                 if (self.noise.escape):
-                    var.spike_rate.set(lib.sigmoidalNonLinearity(var.u.get(i) - self.p.Urest), i)
+                    var.spike_rate.set(lib.sigmoidalNonLinearity(var.u_pre.get(i) - self.p.Urest), i)
                     var.spike_probability.set(lib.poisson(var.spike_rate.get(i), time_step), i)
                 else:
-                    var.spike_probability.set(int(var.u.get(i) >= self.p.threshold), i)
+                    var.spike_probability.set(int(var.u_pre.get(i) >= self.p.threshold), i)
 
             rand = np.random.random()
             if (i - last_spike >= s_ref_count and var.spike_probability.get(i) > rand):
-                var.S.set(1, i)
-                last_spike = i
-                # AP waveform pasted
-                for j, voltage in enumerate(fst_Ca_obj.spike_pulse.getValues()):
+                var.S_pre.set(1, i)
+                # AP waveform pasted (formatter impulse)
+                if (self.noise.axonal["active"]):
+                    fst_Ca_obj.setAPShapeRandom(self.p.spike_duration, self.noise.axonal["AP_width_CV"])
+                for j, voltage in enumerate(fst_Ca_obj.v):
                     if (i+j < N):
-                        var.u.set(voltage, i+j)
+                        var.u_pre.set(voltage, i+j)
+
+        if (self.noise.axonal["active"]):
+            if (var.u.array == False or var.u_pre.array == False):
+                raise Exception()
+            var.S.value, var.u.value = axon.getModifiedSpikeTrain(var.S_pre.value, var.u_pre.value, self.p.t_ref_v, self.p.Urest, self.noise.axonal, time_step)
+        else:
+            var.S.value = var.S_pre.value
+            var.u.value = var.u_pre.value
+
+        for i in range(1, N):  
+            if (var.S.get(i) == 1): 
+                last_spike = i   
+                if (self.noise.axonal["active"]):
+                    #ap_duration_count = int(np.round((self.p.spike_duration/time_step)*(1 + np.random.normal(0, self.noise.AP_width_CV))))
+                    fst_Ca_obj.setAPShape(explicit_waveform = var.u.value[i:i+fst_Ca_obj.N])
                 if (self.noise.VGCC):
                     fst_Ca_obj.simulateAP(unit="µM")
-                if (self.noise.axonal):
-                    ap_duration_count = int(np.round((self.p.spike_duration/time_step)*(1 + np.random.normal(0, self.noise.AP_width_CV))))
                 #var.u.set(self.p.hyperp_v, i)
 
 
@@ -379,14 +407,21 @@ class Simulator:
 
             #Calcium dynamics
             if (self.p.LTP_active == True):
-                func = lambda Ca: lib.updateStoredCa(Ca, var.Ca_Astro.get(i-1), time_step)
-                var.Ca_stored.update(i, func)
+                if (self.noise.Astro and i - last_astro_release >= v_ref_count and np.random.rand() < astro_release_prob*var.Ca_Astro.get(i-1)):
+                    last_astro_release = i
+                if ((self.noise.Astro == False) or i - last_astro_release < glu_duration_count):
+                    func = lambda Ca: lib.updateStoredCa(Ca, var.Ca_Astro.get(i-1), time_step)
+                    var.Ca_stored.update(i, func)
+                else:
+                    func = lambda Ca: lib.updateStoredCa(Ca, 0, time_step)
+                    var.Ca_stored.update(i, func)
                 funcCa_Astro = lambda Ca_Astro: lib.updateCaAstro(Ca_Astro, var.h.get(i-1), var.IP3.get(i-1), time_step)
                 var.Ca_Astro.update(i, funcCa_Astro)
                 funcIP3 = lambda IP3: lib.updateIP3(IP3, var.Ca_Astro.get(i-1), var.glu.get(i), time_step, glu_active)
                 var.IP3.update(i, funcIP3)
-                funch = lambda h: lib.updateInhibitionParameter(h, var.IP3.get(i-1), var.Ca_Astro.get(i-1), time_step)
+                funch = lambda h: lib.updateIP3RGating(h, var.IP3.get(i-1), var.Ca_Astro.get(i-1), time_step)
                 var.h.update(i, funch)
+
             Ca_pre_tot = Ca_AP+var.Ca_stored.get(i) if Ca_AP+var.Ca_stored.get(i) > 0 else 0
             var.Ca_pre.set(Ca_pre_tot, i)
 
@@ -401,7 +436,6 @@ class Simulator:
                 var.site_probabilities[j].set(new_probs[j] if new_probs[j] < 1 else 1, i)
                 open_prob_temp *= var.site_probabilities[j].get(i)
             var.open_prob.set(open_prob_temp if open_prob_temp > 0 else 0, i)
-            
             
             if (i - last_release >= v_ref_count): # Check if vesicle release machinery is ready
                 var.release_rate.set(var.spike_rate.get(i)*var.open_prob.get(i), i)
@@ -421,6 +455,8 @@ class Simulator:
                     var.N_v.set(var.N_v.get(i) - 1, i)
                     var.release_vector.set(1, i)
                     last_release = i
+                    if (spike_active == False):
+                        var.spont_release.set(1, i)
             else:
                 var.release_rate.set(0, i)
                 var.release_prob.set(0, i)
@@ -441,7 +477,7 @@ class Simulator:
 
             # Variable set to state variables
             var.ap_duration_count.set(ap_duration_count, i)
-        """    # Sampling
+            """# Sampling
             if (i % T_info == 0):
                 for j in range(T_info):
                     var.ap_duration_count.set(ap_duration_count_sum/T_info/time_step, i-j) # bits/sec
@@ -455,7 +491,8 @@ class Simulator:
         time_step*max))"""
         return var
 
-    def simulate(self, track_variables, N_iterations = None, save=True, save_each=5) -> Variables:
+    def simulate(self, track_variables, N_iterations = None, save=True, save_each=5, name="") -> Variables:
+        importlib.reload(axon)
         importlib.reload(VGCC)
         if (N_iterations == None):
             N_iterations = self.s.N_iterations
@@ -470,19 +507,23 @@ class Simulator:
         for i in range(1, N_iterations + 1):
             var_sum += self.iterateVariables(track_variables, list[i-1])
             if (save == True and (i%save_each==0 or i == N_iterations)):
-                saveResults(self.s, self.p, var_sum/i)
+                saveResults(self.s, self.p, var_sum/i, i, name)
 
         return var_sum/N_iterations
 
             
-def saveResults(parameters: SimulationParameters, properties: Properties, results: Variables):
-    f1 = open("parameters", "wb")
+def saveResults(parameters: SimulationParameters, properties: Properties, results: Variables, actual_iterations=0, name=""):
+    root = "risultati/"+name
+    tmp = parameters.N_iterations
+    parameters.N_iterations = actual_iterations
+    f1 = open(root+"parameters", "wb")
     pickle.dump(parameters, f1)
+    parameters.N_iterations = tmp
     f1.close()
-    f2 = open("properties", "wb")
+    f2 = open(root+"properties", "wb")
     pickle.dump(properties, f2)
     f2.close()
-    f3 = open("values", "wb")
+    f3 = open(root+"values", "wb")
     pickle.dump(results, f3)
     f3.close()
 

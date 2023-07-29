@@ -19,7 +19,7 @@ def myPlotFigure (common_axis:plt.Axes, xaxis, yaxis, title, unitLabel="", label
     if (labels != None):
         common_axis.legend()
     common_axis.set_title(title)
-    common_axis.set_xlabel("Time (s)")
+    common_axis.set_xlabel("Time [s]")
     if (unitLabel != ""):
         common_axis.set_ylabel(unitLabel)
 

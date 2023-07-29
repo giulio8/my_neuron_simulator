@@ -97,17 +97,17 @@ def updateStoredCa(previous, Ca_Astro, time_step):
 
     delta_Ca = -gamma*previous
     if (Ca_Astro > Ca_thresh):
-        delta_Ca += alpha*Ca_Astro
+        delta_Ca += alpha*Ca_Astro   #*np.random.normal(1, 10)
     return time_step*delta_Ca + previous
 
 
 
-def J_channel(inhibition_parameter, Ca, CaER, IP3):
+def J_channel(IP3R_gating_var, Ca, CaER, IP3):
     c1 = 0.185
     v1 = 6 #s^(-1)
     m_infty = IP3/(IP3 + 0.13)
     n_infty = Ca/(Ca + 0.08234)
-    return c1*v1*((m_infty*n_infty*inhibition_parameter)**3)*(Ca-CaER)
+    return c1*v1*((m_infty*n_infty*IP3R_gating_var)**3)*(Ca-CaER)
 
 def J_leak(Ca, CaER):
     c1 = 0.185
@@ -124,7 +124,7 @@ def Ca_ER(Ca):
     c1 = 0.19 #volume ratio
     return (c0 - Ca)/c1
 
-def updateInhibitionParameter (previous, IP3, Ca_Astro, time_step):
+def updateIP3RGating (previous, IP3, Ca_Astro, time_step):
     N_IP3Rs = 20 #IP3Rs cluster size (Swillens et al., 1999)
     a2 = 0.2 #(uM s)^(-1)
     d2 = 1.049 #uM
@@ -139,16 +139,16 @@ def updateInhibitionParameter (previous, IP3, Ca_Astro, time_step):
     return delta_q*time_step + previous
 
 
-"""def updateAstro (Ca_Astro, IP3, inhibition_parameter, glu, time_step, glu_active=False):
-    new_inhibition_parameter = updateInhibitionParameter(inhibition_parameter, IP3, Ca_Astro, time_step)
+"""def updateAstro (Ca_Astro, IP3, IP3R_gating_var, glu, time_step, glu_active=False):
+    new_IP3R_gating_var = updateInhibitionParameter(IP3R_gating_var, IP3, Ca_Astro, time_step)
     new_IP3 = updateIP3(IP3, Ca_Astro, glu, time_step, glu_active)
-    new_Ca_Astro = updateCaAstro(Ca_Astro, inhibition_parameter, IP3, time_step)
+    new_Ca_Astro = updateCaAstro(Ca_Astro, IP3R_gating_var, IP3, time_step)
 
-    return new_IP3, new_Ca_Astro, new_inhibition_parameter"""
+    return new_IP3, new_Ca_Astro, new_IP3R_gating_var"""
 
-def updateCaAstro (previous, inhibition_parameter, IP3, time_step):
+def updateCaAstro (previous, IP3R_gating_var, IP3, time_step):
     CaER = Ca_ER(previous)
-    delta_Ca = -J_channel(inhibition_parameter, previous, CaER, IP3) - J_pump(previous) - J_leak(previous, CaER)
+    delta_Ca = -J_channel(IP3R_gating_var, previous, CaER, IP3) - J_pump(previous) - J_leak(previous, CaER)
 
     return delta_Ca*time_step + previous
 

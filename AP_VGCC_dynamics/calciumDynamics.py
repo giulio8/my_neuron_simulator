@@ -38,14 +38,17 @@ def updateState(previous, v, time_step):
 def influx(open_prob, v, noise, time_step):
     Ca = Ca_in(v)
     par_fitting = 0.62
-    if (noise["active"]):
-        if (np.random.rand() < 0.5):
-            xi = -np.abs(np.random.normal(0, noise["an"]*(open_prob*Ca)**0.5))
+    if (open_prob > 0):
+        if (noise["active"]):
+            if (np.random.rand() < 0.5):
+                xi = -np.abs(np.random.normal(0, noise["an"]*(open_prob*np.abs(Ca))**0.5))
+            else:
+                xi = np.abs(np.random.logistic(0, (3**0.5)/np.pi*noise["ap"]*(open_prob*np.abs(Ca))**0.5))
         else:
-            xi = np.abs(np.random.logistic(0, (3**0.5)/np.pi*noise["ap"]*(open_prob*Ca)**0.5))
+            xi = 0
+        return par_fitting*(n_ch*open_prob*Ca*time_step + xi)
     else:
-        xi = 0
-    return par_fitting*(n_ch*open_prob*Ca*time_step + xi)
+        return 0
 
 def Ca_in(v):
     base_voltage = 55e-3 #V

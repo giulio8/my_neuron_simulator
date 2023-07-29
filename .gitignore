@@ -130,7 +130,9 @@ dmypy.json
 risultati/
 img*
 img28_02/
+utils.py
 random
+my_neuron.py
 contenitore/
 values
 parameters
