@@ -65,15 +65,15 @@ class SimulationParameters:
         "f_current": "Hz",
         "lambda_": "Hz",
         "N_iterations": "",
-        "init_25s": ""
+        "init_LTP": ""
     }
     def __init__(self, time_step, simulation_time, temperature, DiffEq=False,
-    current_amplitude=0, current_type="DC", f_current=0, init_25s=False, init_N=0, N_iterations=1) -> None:
+    current_amplitude=0, current_type="DC", f_current=0, init_LTP=False, init_N=0, N_iterations=1) -> None:
         self.time_step = time_step
         self.DiffEq = DiffEq
         self.simulation_time = simulation_time
         self.temperature = temperature
-        self.init_25s = init_25s
+        self.init_LTP = init_LTP
         self.init_N = init_N
         self.N = int(np.ceil(simulation_time/time_step))
         self.lambda_fixed = False
@@ -295,9 +295,9 @@ class Simulator:
         s_ref_count = int(self.p.t_ref_s/time_step)
         v_ref_count = int(self.p.t_ref_v/time_step)
         var.N_v.initialize(self.s.init_N)
-        var.IP3.initialize(160e-3 if self.s.init_25s == False else 0.421021) #uM (equilibrium concentration) #(0.421021) 
-        var.Ca_Astro.initialize(0 if self.s.init_25s == False else 0.2)
-        var.h.initialize(valueRand if self.noise.h_init_random else (0.705339 if self.s.init_25s else 0)) #0.705339 valore di salto
+        var.IP3.initialize(160e-3 if self.s.init_LTP == False else 0.421021) #uM (equilibrium concentration) #(0.421021) 
+        var.Ca_Astro.initialize(0 if self.s.init_LTP == False else 0.2)
+        var.h.initialize(valueRand if self.noise.h_init_random else (0.705339 if self.s.init_LTP else 0)) #0.705339 valore di salto
 
         T_info = int(0.02/time_step)
             
